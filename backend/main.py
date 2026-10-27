@@ -312,30 +312,43 @@ def get_estatisticas(ano: int, produto: str):
         preco_anterior = valores_serie[penultimo_mes]
         variacao_mom = ((ultimo_preco - preco_anterior) / preco_anterior) * 100
 
-    # --- NOVA LÓGICA DE TENDÊNCIA (MÉDIA MÓVEL) ---
+    # --- NOVA LÓGICA DE TENDÊNCIA (EMA - MÉDIA MÓVEL EXPONENCIAL) ---
     tendencia = "Estável"
-    if len(meses_preenchidos) >= 6:
-        # Pega os últimos 6 meses preenchidos
-        ultimos6 = meses_preenchidos[-6:]
+    if len(meses_preenchidos) >= 3:
+        # Período da EMA (curto para reagir rápido)
+        periodo_ema = 3
+        alpha = 2 / (periodo_ema + 1)
         
-        # Separa em duas janelas de 3 meses
-        janela_antiga = [valores_serie[m] for m in ultimos6[:3]]
-        janela_recente = [valores_serie[m] for m in ultimos6[3:]]
+        # Pega a série de preços apenas dos meses preenchidos
+        precos_serie = [valores_serie[m] for m in meses_preenchidos]
         
-        media_antiga = sum(janela_antiga) / 3
-        media_recente = sum(janela_recente) / 3
+        # Calcula a EMA inicial (SMA dos primeiros 'periodo_ema' preços)
+        ema_anterior = sum(precos_serie[:periodo_ema]) / periodo_ema
         
-        if media_recente > media_antiga:
-            tendencia = "Alta"
-        elif media_recente < media_antiga:
-            tendencia = "Queda"
-    elif len(meses_preenchidos) >= 3:
-        # Fallback para quem tem entre 3 e 5 meses: compara o primeiro e o último
-        if valores_serie[meses_preenchidos[-1]] > valores_serie[meses_preenchidos[0]]:
-            tendencia = "Alta"
-        elif valores_serie[meses_preenchidos[-1]] < valores_serie[meses_preenchidos[0]]:
-            tendencia = "Queda"
-    # ----------------------------------------------
+        # Itera sobre os preços restantes para calcular a EMA
+        for preco in precos_serie[periodo_ema:]:
+            ema_atual = (preco * alpha) + (ema_anterior * (1 - alpha))
+            ema_anterior = ema_atual
+        
+        # Para saber a direção, precisamos da EMA do mês anterior a esse
+        # Vamos calcular a EMA um passo antes (ignorando o último preço)
+        if len(precos_serie) > periodo_ema:
+            ema_penultima = sum(precos_serie[:periodo_ema]) / periodo_ema
+            for preco in precos_serie[periodo_ema:-1]:
+                ema_penultima = (preco * alpha) + (ema_penultima * (1 - alpha))
+            
+            # Compara a EMA final com a EMA anterior
+            if ema_anterior > ema_penultima:
+                tendencia = "Alta"
+            elif ema_anterior < ema_penultima:
+                tendencia = "Queda"
+        else:
+            # Fallback se não tiver dados suficientes para comparar duas EMAs
+            if precos_serie[-1] > precos_serie[0]:
+                tendencia = "Alta"
+            elif precos_serie[-1] < precos_serie[0]:
+                tendencia = "Queda"
+    # ---------------------------------------------------------------
 
     variacoes = []
     for idx, row in df.iterrows():
