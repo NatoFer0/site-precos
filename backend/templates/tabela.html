@@ -70,7 +70,6 @@
         <div class="botoes-container">
             <a href="/" class="ano-btn" style="background-color: #444; border-color: #444;">🏠 Início</a>
             <div id="area-ano-atual" style="display: flex; gap: 10px;"></div>
-            <a id="btn-ranking" class="ano-btn btn-ranking" href="#">📊 Ranking Geral</a>
         </div>
     </div>
 
@@ -127,8 +126,6 @@
             btnAno.className = 'ano-btn btn-ano-atual';
             btnAno.innerText = `Ano ${anoAtual}`;
             areaAno.appendChild(btnAno);
-
-            document.getElementById('btn-ranking').href = `/ranking/${anoAtual}`;
 
             await carregarTabela(anoAtual);
             await carregarGraficos(anoAtual);

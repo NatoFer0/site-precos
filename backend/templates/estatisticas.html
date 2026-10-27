@@ -111,7 +111,8 @@
     <div class="dashboard">
         <div class="header">
             <div class="header-left">
-                <a href="/" class="btn-voltar">← Voltar</a>
+                <!-- ALTERAÇÃO AQUI: Adicionado o ID para o JavaScript encontrar -->
+                <a href="/" id="btn-voltar-tabela" class="btn-voltar">← Voltar</a>
                 <div class="header-info">
                     <h1 id="nome-produto">Carregando...</h1>
                     <h2 id="ano-referencia"></h2>
@@ -253,6 +254,9 @@
         const ano = pathParts[2];
         const produto = decodeURIComponent(pathParts[3]);
         const mesesOrdem = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+        // ALTERAÇÃO AQUI: Define o link do botão voltar para a tabela do ano correto
+        document.getElementById('btn-voltar-tabela').href = `/tabela/${ano}`;
 
         async function carregarEstatisticas() {
             try {

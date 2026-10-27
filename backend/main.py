@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -96,12 +95,10 @@ def listar_anos():
 
 @app.get("/api/comparar-historico")
 def get_comparar_historico(anos: str = "all", inicio: str = None, fim: str = None):
-    # 1. Define quais anos carregar
     anos_disponiveis = listar_anos()
     if anos == "all":
         anos_para_carregar = anos_disponiveis
     else:
-        # Se o usuário passou uma lista separada por vírgula
         try:
             anos_para_carregar = [int(a) for a in anos.split(",") if int(a) in anos_disponiveis]
         except:
@@ -110,13 +107,11 @@ def get_comparar_historico(anos: str = "all", inicio: str = None, fim: str = Non
     if not anos_para_carregar:
         anos_para_carregar = anos_disponiveis
 
-    # 2. Cria a linha do tempo bruta de todos os anos
     timeline_bruta = []
     for ano in sorted(anos_para_carregar):
         for mes in MESES_ORDEM:
             timeline_bruta.append(f"{mes}/{ano}")
             
-    # 3. Aplica o filtro de período personalizado (corta a linha do tempo)
     timeline = timeline_bruta
     if inicio and fim and inicio in timeline_bruta and fim in timeline_bruta:
         idx_inicio = timeline_bruta.index(inicio)
@@ -127,7 +122,6 @@ def get_comparar_historico(anos: str = "all", inicio: str = None, fim: str = Non
     if not timeline:
         return {"timeline": [], "dados": {}}
 
-    # 4. Carrega os dados e mapeia no formato "Mes/Ano"
     dados_por_produto = {}
     for ano in anos_para_carregar:
         df = carregar_planilha(ano)
@@ -145,7 +139,6 @@ def get_comparar_historico(anos: str = "all", inicio: str = None, fim: str = Non
                 if not pd.isna(preco):
                     dados_por_produto[nome][f"{mes}/{ano}"] = float(preco)
 
-    # 5. Monta a resposta final alinhada com a timeline cortada
     resultado = {}
     for nome, precos in dados_por_produto.items():
         serie = [precos.get(label, None) for label in timeline]
@@ -319,11 +312,30 @@ def get_estatisticas(ano: int, produto: str):
         preco_anterior = valores_serie[penultimo_mes]
         variacao_mom = ((ultimo_preco - preco_anterior) / preco_anterior) * 100
 
+    # --- NOVA LÓGICA DE TENDÊNCIA (MÉDIA MÓVEL) ---
     tendencia = "Estável"
-    if len(meses_preenchidos) >= 3:
-        ultimos3 = [valores_serie[m] for m in meses_preenchidos[-3:]]
-        if ultimos3[2] > ultimos3[0]: tendencia = "Alta"
-        elif ultimos3[2] < ultimos3[0]: tendencia = "Queda"
+    if len(meses_preenchidos) >= 6:
+        # Pega os últimos 6 meses preenchidos
+        ultimos6 = meses_preenchidos[-6:]
+        
+        # Separa em duas janelas de 3 meses
+        janela_antiga = [valores_serie[m] for m in ultimos6[:3]]
+        janela_recente = [valores_serie[m] for m in ultimos6[3:]]
+        
+        media_antiga = sum(janela_antiga) / 3
+        media_recente = sum(janela_recente) / 3
+        
+        if media_recente > media_antiga:
+            tendencia = "Alta"
+        elif media_recente < media_antiga:
+            tendencia = "Queda"
+    elif len(meses_preenchidos) >= 3:
+        # Fallback para quem tem entre 3 e 5 meses: compara o primeiro e o último
+        if valores_serie[meses_preenchidos[-1]] > valores_serie[meses_preenchidos[0]]:
+            tendencia = "Alta"
+        elif valores_serie[meses_preenchidos[-1]] < valores_serie[meses_preenchidos[0]]:
+            tendencia = "Queda"
+    # ----------------------------------------------
 
     variacoes = []
     for idx, row in df.iterrows():
