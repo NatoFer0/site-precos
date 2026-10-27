@@ -9,9 +9,6 @@ from pathlib import Path
 
 app = FastAPI()
 
-# LINHA 2 (O Mount): Ensina o servidor a entregar a pasta static
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
