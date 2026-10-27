@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparar Produtos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #121212; --surface: #1e1e1e; --surface-light: #2a2a2a;
+            --text: #e0e0e0; --text-muted: #9e9e9e;
+            --primary: #4CAF50; --info: #2196F3; --warning: #FF9800;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        .header { 
+            background-color: var(--surface); display: flex; justify-content: space-between; align-items: center; 
+            padding: 15px 30px; border-bottom: 2px solid #444; flex-shrink: 0; z-index: 20;
+            flex-wrap: wrap; gap: 15px;
+        }
+        .header h1 { color: var(--primary); font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        
+        .header-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        
+        .filtro-container { display: flex; align-items: center; gap: 10px; background-color: var(--bg); padding: 5px 15px; border-radius: 6px; border: 1px solid #444; }
+        .filtro-container label { font-size: 13px; color: var(--text-muted); font-weight: bold; }
+        .filtro-container select { background: none; border: none; color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; outline: none; }
+        .filtro-container select option { background-color: var(--surface); }
+        
+        .btn-voltar { background-color: #333; color: white; border: 1px solid #555; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold; }
+        .btn-voltar:hover { background-color: #4CAF50; }
+
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+
+        .sidebar { width: 320px; background-color: var(--surface); border-right: 1px solid #444; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 15px; border-bottom: 1px solid #333; }
+        .sidebar-header input { width: 100%; padding: 10px; background-color: var(--bg); color: #fff; border: 1px solid #444; border-radius: 4px; outline: none; }
+        .lista-produtos { flex: 1; overflow-y: auto; padding: 10px; }
+        
+        .produto-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-size: 14px; }
+        .produto-item:hover { background-color: var(--surface-light); }
+        .produto-item input[type="checkbox"] { cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary); }
+        
+        .chart-area { flex: 1; padding: 30px; display: flex; flex-direction: column; }
+        
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background-color: var(--surface); padding: 15px 20px; border-radius: 8px; border: 1px solid #444; }
+        .chart-header h2 { font-size: 20px; color: #fff; }
+        
+        .seletor-container { display: flex; align-items: center; gap: 15px; }
+        .seletor-container label { font-size: 14px; color: var(--text-muted); font-weight: bold; }
+        .seletor-container select { background-color: var(--bg); color: var(--primary); border: 1px solid var(--primary); padding: 8px 12px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; outline: none; max-width: 280px; }
+        
+        .chart-container { flex: 1; background-color: var(--surface); border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative; }
+
+        .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); }
+        
+        .btn-info { background-color: transparent; color: var(--info); border: 2px solid var(--info); width: 28px; height: 28px; border-radius: 50%; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-family: serif; }
+        .btn-info:hover { background-color: var(--info); color: #fff; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-content { background-color: var(--surface); border: 1px solid #555; border-radius: 12px; width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; }
+        .modal-header { padding: 20px; border-bottom: 2px solid #444; display: flex; justify-content: space-between; align-items: center; background-color: #111; border-radius: 12px 12px 0 0; }
+        .modal-header h3 { color: var(--info); font-size: 20px; }
+        .btn-fechar { background: none; border: none; color: var(--text-muted); font-size: 28px; cursor: pointer; }
+        .btn-fechar:hover { color: #fff; }
+        .modal-body { padding: 25px; overflow-y: auto; line-height: 1.6; color: var(--text-muted); font-size: 14px; }
+        .modal-body h4 { color: var(--primary); margin-top: 15px; margin-bottom: 5px; font-size: 16px; }
+        .modal-body p { margin-bottom: 10px; }
+        
+        #carregando-lista { text-align: center; color: var(--text-muted); padding: 20px; font-size: 14px;}
+
+        /* Estilo do Alerta de Erro de Data */
+        .alerta-erro {
+            display: none; background-color: #F44336; color: white; 
+            padding: 10px 20px; border-radius: 4px; margin-bottom: 15px; 
+            font-weight: bold; font-size: 14px; text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🔄 Comparar Produtos</h1>
+        
+        <div class="header-actions">
+            <div class="filtro-container">
+                <label for="seletor-periodo">Período:</label>
+                <select id="seletor-periodo" onchange="mudarPeriodo()">
+                    <option value="all">Todo o Histórico</option>
+                    <option value="custom">Personalizado...</option>
+                </select>
+            </div>
+
+            <div id="custom-range" class="filtro-container" style="display: none;">
+                <label>De:</label>
+                <select id="data-inicio"></select>
+                <label>Até:</label>
+                <select id="data-fim"></select>
+                <button onclick="aplicarFiltroCustom()" style="background: var(--primary); border: none; color: #fff; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">Aplicar</button>
+            </div>
+            
+            <a href="/" class="btn-voltar">← Voltar para Home</a>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <input type="text" id="busca-produto" placeholder="Buscar produto..." onkeyup="filtrarProdutos()">
+            </div>
+            <div class="lista-produtos" id="lista-produtos">
+                <div id="carregando-lista">Carregando produtos...</div>
+            </div>
+        </div>
+
+        <div class="chart-area">
+            <!-- ALERTA DE ERRO -->
+            <div id="alerta-data" class="alerta-erro"></div>
+
+            <div class="chart-header">
+                <h2 id="titulo-grafico">Selecione uma métrica</h2>
+                
+                <div class="seletor-container">
+                    <label for="seletor-metrica">Métrica:</label>
+                    <select id="seletor-metrica" onchange="atualizarGrafico()">
+                        <option value="var_acumulada">Variação Acumulada (%)</option>
+                        <option value="var_mom">Variação Mês a Mês - MoM (%)</option>
+                        <option value="indice_base100">Índice de Preço (Base 100)</option>
+                        <option value="preco_nominal">Preço Nominal (R$)</option>
+                        <option value="desvio_media">Desvio da Própria Média (%)</option>
+                        <option value="dif_media_cesta">Diferença contra a Média da Cesta (%)</option>
+                        <option value="volatilidade_movel">Volatilidade Móvel (Desvio Padrão 3 Meses)</option>
+                        <option value="ranking_mensal">Posição no Ranking Mensal (1º ao Nº)</option>
+                    </select>
+                    <button class="btn-info" onclick="abrirModal()">i</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div id="empty-state" class="empty-state">
+                    Selecione pelo menos um produto na barra lateral para comparar.
+                </div>
+                <canvas id="grafico-comparacao" style="display: none;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-info">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>ℹ️ Guia das Métricas</h3>
+                <button class="btn-fechar" onclick="fecharModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4>Variação Acumulada (%)</h4>
+                <p>Mostra o quanto o preço subiu ou caiu ao longo do período selecionado em comparação ao valor inicial.</p>
+
+                <h4>Variação Mês a Mês - MoM (%)</h4>
+                <p>Mostra o aumento ou desconto imediato de cada mês em relação ao mês anterior.</p>
+
+                <h4>Índice de Preço (Base 100)</h4>
+                <p>Transforma o preço de início em 100 para comparar facilmente o ritmo de alta entre produtos de valores diferentes.</p>
+
+                <h4>Preço Nominal (R$)</h4>
+                <p>Mostra o valor real pago na prateleira a cada mês.</p>
+
+                <h4>Desvio da Própria Média (%)</h4>
+                <p>Mostra os meses em que o produto esteve mais barato (abaixo da média) ou mais caro que o habitual (acima da média).</p>
+
+                <h4>Diferença contra a Média da Cesta (%)</h4>
+                <p>Mostra se o produto subiu mais rápido ou mais devagar do que o conjunto de todas as compras juntas.</p>
+
+                <h4>Volatilidade Móvel (Desvio Padrão 3 Meses)</h4>
+                <p>Mostra os períodos em que o preço do produto mais oscilou ou ficou congelado.</p>
+
+                <h4>Posição no Ranking Mensal (1º ao Nº)</h4>
+                <p>Mostra a posição do produto no pódio dos itens mais caros da lista a cada mês (quem está no topo custa mais).</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        const CORES = ['#4CAF50', '#2196F3', '#FF9800', '#F44336', '#9C27B0', '#00BCD4', '#E91E63', '#8BC34A', '#FFC107', '#795548', '#607D8B', '#FF5722', '#CDDC39', '#03A9F4'];
+
+        let todosDados = {}; 
+        let timelineLabels = []; 
+        let dadosSelecionados = {}; 
+        let meuGrafico = null;
+
+        function abrirModal() { document.getElementById('modal-info').style.display = 'flex'; }
+        function fecharModal() { document.getElementById('modal-info').style.display = 'none'; }
+        document.getElementById('modal-info').addEventListener('click', function(e) { if (e.target === this) fecharModal(); });
+
+        async function inicializar() {
+            try {
+                const response = await fetch('/api/anos');
+                const anos = await response.json();
+                
+                const selectPeriodo = document.getElementById('seletor-periodo');
+                Array.from(selectPeriodo.options).forEach(opt => {
+                    if (opt.value !== 'all' && opt.value !== 'custom') opt.remove();
+                });
+
+                anos.forEach(ano => {
+                    const opt = document.createElement('option');
+                    opt.value = ano;
+                    opt.innerText = `Ano ${ano}`;
+                    selectPeriodo.insertBefore(opt, selectPeriodo.lastElementChild);
+                });
+
+                const selectInicio = document.getElementById('data-inicio');
+                const selectFim = document.getElementById('data-fim');
+                
+                anos.forEach(ano => {
+                    MESES.forEach(mes => {
+                        const opt1 = document.createElement('option');
+                        opt1.value = `${mes}/${ano}`; opt1.innerText = `${mes}/${ano}`;
+                        selectInicio.appendChild(opt1);
+
+                        const opt2 = document.createElement('option');
+                        opt2.value = `${mes}/${ano}`; opt2.innerText = `${mes}/${ano}`;
+                        selectFim.appendChild(opt2);
+                    });
+                });
+
+                if (selectInicio.options.length > 0) {
+                    selectInicio.selectedIndex = 0;
+                    selectFim.selectedIndex = selectFim.options.length - 1;
+                }
+
+                carregarDados("all");
+
+            } catch (erro) {
+                console.error("Erro ao carregar anos:", erro);
+            }
+        }
+
+        function mudarPeriodo() {
+            const periodo = document.getElementById('seletor-periodo').value;
+            const customRange = document.getElementById('custom-range');
+
+            if (periodo === 'custom') {
+                customRange.style.display = 'flex';
+            } else {
+                customRange.style.display = 'none';
+                document.getElementById('alerta-data').style.display = 'none'; 
+                carregarDados(periodo);
+            }
+        }
+
+        // VALIDAÇÃO DA DATA ATUALIZADA
+        function aplicarFiltroCustom() {
+            const inicio = document.getElementById('data-inicio').value;
+            const fim = document.getElementById('data-fim').value;
+            const alerta = document.getElementById('alerta-data');
+            
+            if (inicio && fim) {
+                const dataInicioObj = new Date(inicio.split('/')[1], MESES.indexOf(inicio.split('/')[0]));
+                const dataFimObj = new Date(fim.split('/')[1], MESES.indexOf(fim.split('/')[0]));
+
+                // 1. Erro: Data final menor que a inicial
+                if (dataInicioObj > dataFimObj) {
+                    alerta.innerText = "A data 'Até' não pode ser inferior à data 'De'. Por favor, selecione um período válido.";
+                    alerta.style.backgroundColor = '#FF9800'; // Laranja
+                    alerta.style.display = 'block'; 
+                    return; 
+                }
+
+                // 2. Aviso: Datas iguais (Mantido estático e laranja)
+                if (dataInicioObj.getTime() === dataFimObj.getTime()) {
+                    alerta.innerText = "💡 Você selecionou datas iguais. Para ver a evolução do preço, selecione um período com pelo menos 2 meses (ex: Junho a Julho).";
+                    alerta.style.backgroundColor = '#FF9800'; // Laranja (Alerta)
+                    alerta.style.display = 'block'; 
+                    // Sem setTimeout, a mensagem fica na tela
+                } else {
+                    // 3. Tudo certo: Esconde o alerta e busca os dados
+                    alerta.style.display = 'none'; 
+                    const url = `/api/comparar-historico?anos=all&inicio=${encodeURIComponent(inicio)}&fim=${encodeURIComponent(fim)}`;
+                    buscarDados(url);
+                }
+            }
+        }
+
+        async function carregarDados(periodo) {
+            let url = '/api/comparar-historico?anos=all';
+            if (periodo !== 'all') {
+                url = `/api/comparar-historico?anos=${periodo}`;
+            }
+            await buscarDados(url);
+        }
+
+        async function buscarDados(url) {
+            const produtosAntigos = Object.keys(dadosSelecionados);
+
+            document.getElementById('lista-produtos').innerHTML = '<div id="carregando-lista">Carregando produtos...</div>';
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                todosDados = data.dados;
+                timelineLabels = data.timeline;
+                dadosSelecionados = {}; 
+
+                const lista = document.getElementById('lista-produtos');
+                lista.innerHTML = '';
+
+                Object.keys(todosDados).sort().forEach(produto => {
+                    const estavaSelecionado = produtosAntigos.includes(produto);
+                    if (estavaSelecionado) {
+                        dadosSelecionados[produto] = true; 
+                    }
+
+                    const div = document.createElement('div');
+                    div.className = 'produto-item';
+                    div.innerHTML = `
+                        <input type="checkbox" id="chk-${produto}" value="${produto}" 
+                            ${estavaSelecionado ? 'checked' : ''} 
+                            onchange="toggleProduto(this)">
+                        <label for="chk-${produto}" style="cursor:pointer; flex:1;">${produto}</label>
+                    `;
+                    lista.appendChild(div);
+                });
+
+                if (Object.keys(todosDados).length === 0) {
+                    lista.innerHTML = '<div style="text-align:center; padding:20px; color:#aaa;">Nenhum dado no período.</div>';
+                }
+
+                atualizarGrafico();
+
+            } catch (erro) {
+                console.error("Erro ao carregar dados:", erro);
+                document.getElementById('lista-produtos').innerHTML = '<div style="color:red; padding:20px;">Erro ao carregar.</div>';
+            }
+        }
+
+        function toggleProduto(checkbox) {
+            const produto = checkbox.value;
+            if (checkbox.checked) {
+                dadosSelecionados[produto] = true;
+            } else {
+                delete dadosSelecionados[produto];
+            }
+            atualizarGrafico();
+        }
+
+        function filtrarProdutos() {
+            const termo = document.getElementById('busca-produto').value.toLowerCase();
+            const itens = document.querySelectorAll('.produto-item');
+            
+            itens.forEach(item => {
+                const texto = item.querySelector('label').innerText.toLowerCase();
+                item.style.display = texto.includes(termo) ? 'flex' : 'none';
+            });
+        }
+
+        function calcularDadosParaGrafico(seriePrecos, metrica) {
+            let baseInicial = null;
+            let valores = [];
+            let somaValidos = 0;
+            let countValidos = 0;
+            let mediaPeriodo = 0;
+
+            for (let i = 0; i < seriePrecos.length; i++) {
+                if (seriePrecos[i] !== null) {
+                    if (baseInicial === null) baseInicial = seriePrecos[i];
+                    somaValidos += seriePrecos[i];
+                    countValidos++;
+                }
+            }
+            if (countValidos > 0) mediaPeriodo = somaValidos / countValidos;
+
+            let mediaCestaPorMes = Array(timelineLabels.length).fill(0);
+            if (metrica === 'dif_media_cesta') {
+                for (let m = 0; m < timelineLabels.length; m++) {
+                    let somaVar = 0; let count = 0;
+                    Object.values(todosDados).forEach(serie => {
+                        let pInicio = serie.find(v => v !== null);
+                        let pMes = serie[m];
+                        if (pInicio && pMes) {
+                            somaVar += ((pMes - pInicio) / pInicio) * 100;
+                            count++;
+                        }
+                    });
+                    mediaCestaPorMes[m] = count > 0 ? (somaVar / count) : 0;
+                }
+            }
+
+            let rankingPorMes = {};
+            if (metrica === 'ranking_mensal') {
+                for (let m = 0; m < timelineLabels.length; m++) {
+                    let validosNoMes = [];
+                    Object.entries(todosDados).forEach(([nome, serie]) => {
+                        if (serie[m] !== null) {
+                            validosNoMes.push({ nome, preco: serie[m] });
+                        }
+                    });
+                    validosNoMes.sort((a, b) => b.preco - a.preco);
+                    validosNoMes.forEach((item, index) => {
+                        if (!rankingPorMes[m]) rankingPorMes[m] = {};
+                        rankingPorMes[m][item.nome] = index + 1;
+                    });
+                }
+            }
+
+            for (let i = 0; i < timelineLabels.length; i++) {
+                let preco = seriePrecos[i];
+
+                if (preco === null) {
+                    valores.push(null);
+                    continue;
+                }
+
+                switch(metrica) {
+                    case 'var_acumulada':
+                        valores.push(((preco - baseInicial) / baseInicial) * 100);
+                        break;
+                    case 'indice_base100':
+                        valores.push((preco / baseInicial) * 100);
+                        break;
+                    case 'preco_nominal':
+                        valores.push(preco);
+                        break;
+                    case 'desvio_media':
+                        valores.push(((preco - mediaPeriodo) / mediaPeriodo) * 100);
+                        break;
+                    case 'var_mom':
+                        if (i === 0 || seriePrecos[i-1] === null) {
+                            valores.push(0);
+                        } else {
+                            valores.push(((preco - seriePrecos[i-1]) / seriePrecos[i-1]) * 100);
+                        }
+                        break;
+                    case 'dif_media_cesta':
+                        let varIndividual = ((preco - baseInicial) / baseInicial) * 100;
+                        valores.push(varIndividual - mediaCestaPorMes[i]);
+                        break;
+                    case 'volatilidade_movel':
+                        if (i < 2 || seriePrecos[i-1] === null || seriePrecos[i-2] === null) {
+                            valores.push(null);
+                        } else {
+                            let ultimos3 = [seriePrecos[i-2], seriePrecos[i-1], seriePrecos[i]];
+                            let media3 = (ultimos3[0] + ultimos3[1] + ultimos3[2]) / 3;
+                            let variancia = (Math.pow(ultimos3[0] - media3, 2) + Math.pow(ultimos3[1] - media3, 2) + Math.pow(ultimos3[2] - media3, 2)) / 3;
+                            valores.push(Math.sqrt(variancia)); 
+                        }
+                        break;
+                    case 'ranking_mensal':
+                        let nomeProduto = Object.keys(dadosSelecionados).find(k => todosDados[k] === seriePrecos);
+                        let pos = rankingPorMes[i] ? rankingPorMes[i][nomeProduto] : null;
+                        valores.push(pos);
+                        break;
+                }
+            }
+            return valores;
+        }
+
+        function atualizarGrafico() {
+            const produtos = Object.keys(dadosSelecionados);
+            const canvas = document.getElementById('grafico-comparacao');
+            const emptyState = document.getElementById('empty-state');
+            const metrica = document.getElementById('seletor-metrica').value;
+            const titulo = document.getElementById('titulo-grafico');
+
+            const titulos = {
+                'var_acumulada': 'Variação Acumulada (%)',
+                'var_mom': 'Variação Mês a Mês - MoM (%)',
+                'indice_base100': 'Índice de Preço (Base 100)',
+                'preco_nominal': 'Preço Nominal (R$)',
+                'desvio_media': 'Desvio da Própria Média (%)',
+                'dif_media_cesta': 'Diferença contra a Média da Cesta (%)',
+                'volatilidade_movel': 'Volatilidade Móvel (Desvio Padrão 3 Meses)',
+                'ranking_mensal': 'Posição no Ranking Mensal (1º = Mais Caro)'
+            };
+            titulo.innerText = titulos[metrica];
+
+            if (meuGrafico) { meuGrafico.destroy(); meuGrafico = null; }
+
+            if (produtos.length === 0) {
+                canvas.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            canvas.style.display = 'block';
+            emptyState.style.display = 'none';
+
+            const datasets = produtos.map((nome, index) => {
+                const seriePrecos = todosDados[nome];
+                const dadosCalculados = calcularDadosParaGrafico(seriePrecos, metrica);
+
+                return {
+                    label: nome,
+                    data: dadosCalculados,
+                    borderColor: CORES[index % CORES.length],
+                    backgroundColor: CORES[index % CORES.length],
+                    borderWidth: 2.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    tension: 0.3,
+                    spanGaps: true,
+                    fill: false
+                };
+            });
+
+            let tooltipCallback = function(context) {
+                let val = context.parsed.y;
+                if (val === null) return `${context.dataset.label}: Falta`;
+                
+                if (metrica === 'indice_base100') return `${context.dataset.label}: ${val.toFixed(1)}`;
+                if (metrica === 'preco_nominal') return `${context.dataset.label}: R$ ${val.toFixed(2)}`;
+                if (metrica === 'ranking_mensal') return `${context.dataset.label}: ${val}º lugar`;
+                if (metrica === 'volatilidade_movel') return `${context.dataset.label}: DP R$ ${val.toFixed(2)}`;
+                
+                let sinal = val > 0 ? "+" : "";
+                return `${context.dataset.label}: ${sinal}${val.toFixed(2)}%`;
+            };
+
+            let scalesConfig = { x: { ticks: { color: '#aaa' }, grid: { display: false } } };
+            
+            if (metrica === 'ranking_mensal') {
+                scalesConfig.y = { reverse: true, ticks: { color: '#aaa', callback: (v) => v + 'º' }, grid: { color: '#444' } };
+            } else if (metrica === 'indice_base100') {
+                scalesConfig.y = { ticks: { color: '#aaa' }, grid: { color: '#444' } };
+            } else if (metrica === 'preco_nominal' || metrica === 'volatilidade_movel') {
+                scalesConfig.y = { beginAtZero: true, ticks: { color: '#aaa', callback: (v) => 'R$ ' + v }, grid: { color: '#444' } };
+            } else {
+                scalesConfig.y = { ticks: { color: '#aaa', callback: (v) => (v > 0 ? '+' : '') + v + '%' }, grid: { color: '#444' } };
+            }
+
+            const ctx = canvas.getContext('2d');
+            meuGrafico = new Chart(ctx, {
+                type: 'line',
+                data: { labels: timelineLabels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#fff', font: {size: 14} }, position: 'bottom' },
+                        tooltip: { callbacks: { label: tooltipCallback } }
+                    },
+                    scales: scalesConfig
+                }
+            });
+        }
+
+        inicializar();
+    </script>
+</body>
+</html>

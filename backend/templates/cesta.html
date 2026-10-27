@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Composição da Cesta</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #121212; --surface: #1e1e1e; --surface-light: #2a2a2a;
+            --text: #e0e0e0; --text-muted: #9e9e9e;
+            --primary: #4CAF50; --info: #2196F3;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        .header { 
+            background-color: var(--surface); display: flex; justify-content: space-between; align-items: center; 
+            padding: 15px 30px; border-bottom: 2px solid #444; flex-shrink: 0; 
+        }
+        .header h1 { color: var(--primary); font-size: 24px; }
+        .btn-voltar { background-color: #333; color: white; border: 1px solid #555; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold; }
+        .btn-voltar:hover { background-color: var(--primary); }
+
+        .main-content { flex: 1; display: flex; padding: 30px; gap: 30px; overflow: hidden; }
+        
+        /* Área do Gráfico (Esquerda) */
+        .chart-area { flex: 2; background-color: var(--surface); border-radius: 10px; padding: 20px; position: relative; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center;}
+        
+        /* Área de Detalhes (Direita) */
+        .detalhes-area { 
+            flex: 1.2; background-color: var(--surface); border-radius: 10px; padding: 20px; 
+            display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+            overflow: hidden; 
+        }
+        
+        .kpi-total { background-color: var(--surface-light); padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid var(--info); flex-shrink: 0;}
+        .kpi-total h3 { font-size: 14px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;}
+        .kpi-total p { font-size: 32px; font-weight: bold; color: #fff; }
+        .kpi-total span { font-size: 13px; color: var(--text-muted); }
+
+        /* Lista de Legenda com Rolagem */
+        .legenda-lista { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding-right: 10px; 
+        }
+        
+        /* Barra de rolagem customizada */
+        .legenda-lista::-webkit-scrollbar { width: 6px; }
+        .legenda-lista::-webkit-scrollbar-track { background: transparent; }
+        .legenda-lista::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        .legenda-lista::-webkit-scrollbar-thumb:hover { background: #777; }
+
+        .legenda-item { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 10px 0; border-bottom: 1px solid #333; font-size: 14px;
+        }
+        .legenda-item:last-child { border-bottom: none; }
+        .legenda-cor { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; flex-shrink: 0;}
+        
+        .legenda-info { display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px;}
+        .legenda-valores { text-align: right; flex-shrink: 0;}
+        .legenda-valores .pct { color: var(--text-muted); font-size: 12px; margin-left: 10px; }
+        
+        #carregando { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🛒 Composição da Cesta</h1>
+        <a href="#" id="btn-voltar" class="btn-voltar">← Voltar para Tabela</a>
+    </div>
+
+    <div class="main-content" id="conteudo" style="display: none;">
+        
+        <!-- Área do Gráfico de Pizza -->
+        <div class="chart-area">
+            <canvas id="grafico-pizza"></canvas>
+        </div>
+
+        <!-- Área de Detalhes -->
+        <div class="detalhes-area">
+            <div class="kpi-total">
+                <h3>Custo Total da Cesta</h3>
+                <p id="kpi-total-cesta">R$ 0,00</p>
+                <span id="kpi-info-mes">Mês: - | Produtos: 0</span>
+            </div>
+
+            <div class="legenda-lista" id="legenda-lista">
+                <!-- Itens da legenda serão injetados aqui -->
+            </div>
+        </div>
+
+    </div>
+
+    <div id="carregando">Carregando dados da cesta...</div>
+
+    <script>
+        const pathParts = window.location.pathname.split('/');
+        const ano = pathParts[2];
+        const mes = decodeURIComponent(pathParts[3]);
+
+        document.getElementById('btn-voltar').href = `/tabela/${ano}`;
+
+        function gerarCores(qtd) {
+            const cores = [];
+            for (let i = 0; i < qtd; i++) {
+                const hue = Math.floor((360 / qtd) * i); 
+                cores.push(`hsl(${hue}, 70%, 55%)`);
+            }
+            return cores;
+        }
+
+        async function carregarCesta() {
+            try {
+                const response = await fetch(`/api/cesta/${ano}/${mes}`);
+                const dados = await response.json();
+
+                if (dados.erro) {
+                    document.getElementById('carregando').innerText = dados.erro;
+                    return;
+                }
+
+                document.getElementById('kpi-total-cesta').innerText = `R$ ${dados.total_cesta.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-info-mes').innerText = `Mês: ${dados.mes} | Produtos: ${dados.qtd_produtos}`;
+
+                const cores = gerarCores(dados.dados.length);
+
+                const labels = dados.dados.map(d => d.label);
+                const valores = dados.dados.map(d => d.preco);
+                const porcentagens = dados.dados.map(d => d.porcentagem);
+
+                const ctx = document.getElementById('grafico-pizza').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut', 
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: valores,
+                            backgroundColor: cores,
+                            borderColor: '#1e1e1e', 
+                            borderWidth: 1.5,
+                            hoverOffset: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '50%', 
+                        plugins: {
+                            legend: {
+                                display: false 
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let idx = context.dataIndex;
+                                        let preco = valores[idx].toFixed(2).replace('.', ',');
+                                        // 2 casas decimais exatas
+                                        let pct = porcentagens[idx].toFixed(2).replace('.', ',');
+                                        return `R$ ${preco} (${pct}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const legendaLista = document.getElementById('legenda-lista');
+                legendaLista.innerHTML = '';
+
+                dados.dados.forEach((item, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'legenda-item';
+                    
+                    // 2 casas decimais exatas na legenda
+                    div.innerHTML = `
+                        <div class="legenda-info">
+                            <span class="legenda-cor" style="background-color: ${cores[index]};"></span>
+                            <span title="${item.label}">${item.label}</span>
+                        </div>
+                        <div class="legenda-valores">
+                            <strong>R$ ${item.preco.toFixed(2).replace('.', ',')}</strong>
+                            <span class="pct">(${item.porcentagem.toFixed(2)}%)</span>
+                        </div>
+                    `;
+                    legendaLista.appendChild(div);
+                });
+
+                document.getElementById('carregando').style.display = 'none';
+                document.getElementById('conteudo').style.display = 'flex';
+
+            } catch (erro) {
+                console.error(erro);
+                document.getElementById('carregando').innerText = "Erro ao carregar dados.";
+            }
+        }
+
+        carregarCesta();
+    </script>
+</body>
+</html>

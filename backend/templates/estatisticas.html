@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico - Preços</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        :root {
+            --bg: #121212; --surface: #1e1e1e; --surface-light: #2a2a2a;
+            --text: #e0e0e0; --text-muted: #9e9e9e;
+            --primary: #4CAF50; --danger: #F44336; --warning: #FF9800; --info: #2196F3;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 20px; }
+        
+        .dashboard { max-width: 1200px; margin: 0 auto; }
+        
+        /* Cabeçalho */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        .btn-voltar { background-color: var(--surface-light); color: var(--text); border: 1px solid #444; padding: 10px 15px; border-radius: 6px; text-decoration: none; transition: 0.2s; font-weight: bold; }
+        .btn-voltar:hover { background-color: var(--primary); border-color: var(--primary); }
+        .header-info h1 { color: var(--primary); font-size: 26px; }
+        .header-info h2 { font-size: 14px; color: var(--text-muted); font-weight: normal; margin-top: 4px; }
+        
+        .badge-tendencia { padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; text-transform: uppercase; }
+        .bg-alta { background-color: rgba(244, 67, 54, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+        .bg-queda { background-color: rgba(76, 175, 80, 0.2); color: var(--primary); border: 1px solid var(--primary); }
+        .bg-estavel { background-color: rgba(255, 152, 0, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+
+        /* Grid de Cards */
+        .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background-color: var(--surface); padding: 20px; border-radius: 10px; border-top: 4px solid #444; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative; }
+        
+        .card h3 { 
+            font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; 
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        
+        .card p { font-size: 24px; font-weight: bold; color: #fff; margin-bottom: 5px; }
+        .card span.sub { font-size: 12px; color: var(--text-muted); }
+        
+        .card.primary { border-top-color: var(--primary); }
+        .card.danger { border-top-color: var(--danger); }
+        .card.info { border-top-color: var(--info); }
+        .card.warning { border-top-color: var(--warning); }
+        
+        .btn-info-mini {
+            background-color: transparent; color: var(--info); border: 1px solid var(--info);
+            width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-weight: bold;
+            cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+            transition: 0.2s; font-family: serif; margin-left: 5px;
+        }
+        .btn-info-mini:hover { background-color: var(--info); color: #fff; }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px; vertical-align: middle;}
+        .badge-subiu { background: rgba(244, 67, 54, 0.2); color: var(--danger); }
+        .badge-desceu { background: rgba(76, 175, 80, 0.2); color: var(--primary); }
+        .badge-neutro { background: rgba(158, 158, 158, 0.2); color: var(--text-muted); }
+
+        /* Containers dos Gráficos */
+        .chart-container { background-color: var(--surface); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; position: relative; height: 350px; width: 100%; }
+        
+        /* Tabela Mini Breakdown */
+        .table-container { background-color: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-top: 20px;}
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background-color: #111; padding: 12px 15px; font-size: 13px; color: var(--text-muted); border-bottom: 2px solid #444; }
+        th:hover { color: #fff; }
+        td { padding: 12px 15px; border-bottom: 1px solid #333; font-size: 14px; }
+        tr:hover td { background-color: var(--surface-light); }
+        .falta { color: var(--text-muted); font-style: italic; }
+        
+        /* Termômetro */
+        .termometro-container { margin-top: 20px; background: var(--surface); padding: 20px; border-radius: 10px; }
+        .termometro-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+        .termometro-barra { height: 12px; background: linear-gradient(90deg, var(--primary) 0%, var(--warning) 50%, var(--danger) 100%); border-radius: 6px; position: relative; }
+        .termometro-indicador { position: absolute; top: -5px; width: 4px; height: 22px; background: #fff; border-radius: 2px; transition: left 0.5s ease-out; box-shadow: 0 0 5px #fff; }
+
+        #carregando { text-align: center; font-size: 20px; margin-top: 50px; color: var(--primary); }
+        .erro { color: var(--danger); text-align: center; font-size: 20px; margin-top: 50px; }
+
+        /* --- ESTILOS DO MODAL DE INFORMAÇÃO --- */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: var(--surface); border: 1px solid #555; border-radius: 12px;
+            width: 90%; max-width: 500px; max-height: 85vh; display: flex; flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .modal-header {
+            padding: 20px; border-bottom: 2px solid #444; display: flex; justify-content: space-between; align-items: center;
+            background-color: #111; border-radius: 12px 12px 0 0;
+        }
+        .modal-header h3 { color: var(--info); font-size: 20px; }
+        .btn-fechar { background: none; border: none; color: var(--text-muted); font-size: 28px; cursor: pointer; line-height: 1; }
+        .btn-fechar:hover { color: #fff; }
+        
+        .modal-body { padding: 25px; overflow-y: auto; line-height: 1.6; color: var(--text-muted); font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="header">
+            <div class="header-left">
+                <a href="/" class="btn-voltar">← Voltar</a>
+                <div class="header-info">
+                    <h1 id="nome-produto">Carregando...</h1>
+                    <h2 id="ano-referencia"></h2>
+                </div>
+            </div>
+            <div id="tendencia-container"></div>
+        </div>
+
+        <div id="carregando">Processando dados estatísticos...</div>
+        <div id="erro" class="erro" style="display: none;"></div>
+
+        <div id="conteudo" style="display: none;">
+            
+            <!-- LINHA 1: CARDS PRINCIPAIS -->
+            <div class="grid-kpi">
+                <div class="card primary">
+                    <h3>Preço Mais Recente <button class="btn-info-mini" onclick="abrirModal('O valor da última pesquisa registrada para este produto no ano. O badge indica a variação em relação ao mês anterior (MoM).')">i</button></h3>
+                    <p id="kpi-atual">R$ 0,00</p>
+                    <span class="sub" id="kpi-atual-mes"></span>
+                    <span class="badge" id="kpi-mom"></span>
+                </div>
+                <div class="card info">
+                    <h3>Preço Médio <button class="btn-info-mini" onclick="abrirModal('A média aritmética simples de todos os meses em que o produto teve preço registrado no ano.')">i</button></h3>
+                    <p id="kpi-media">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Menor Preço (<span id="kpi-mes-min"></span>) <button class="btn-info-mini" onclick="abrirModal('O menor preço encontrado no ano e o mês em que ele ocorreu.')">i</button></h3>
+                    <p id="kpi-minimo" style="color: var(--primary);">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Maior Preço (<span id="kpi-mes-max"></span>) <button class="btn-info-mini" onclick="abrirModal('O maior preço encontrado no ano e o mês em que ele ocorreu.')">i</button></h3>
+                    <p id="kpi-maximo" style="color: var(--danger);">R$ 0,00</p>
+                </div>
+                <div class="card warning">
+                    <h3>Amplitude de Preço <button class="btn-info-mini" onclick="abrirModal('A diferença em Reais entre o maior e o menor preço do ano. A porcentagem mostra o quanto isso representa em relação ao menor preço (dispersão).')">i</button></h3>
+                    <p id="kpi-amplitude">R$ 0,00</p>
+                    <span class="sub" id="kpi-amplitude-pct">0% de dispersão</span>
+                </div>
+            </div>
+
+            <!-- LINHA 2: CARDS SECUNDÁRIOS -->
+            <div class="grid-kpi">
+                <div class="card">
+                    <h3>Mediana <button class="btn-info-mini" onclick="abrirModal('O valor central dos preços quando organizados em ordem. Diferente da média, a mediana não é afetada por picos extremos.')">i</button></h3>
+                    <p id="kpi-mediana">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Moda (Mais Frequente) <button class="btn-info-mini" onclick="abrirModal('O preço que mais vezes se repetiu durante o ano e a quantidade de meses em que ele apareceu.')">i</button></h3>
+                    <p id="kpi-moda">R$ 0,00</p>
+                    <span class="sub" id="kpi-moda-freq"></span>
+                </div>
+                <div class="card">
+                    <h3>Volatilidade (CV) <button class="btn-info-mini" onclick="abrirModal('O Coeficiente de Variação mede o quanto o preço oscilou em relação à média. Quanto maior, mais instável foi o preço.')">i</button></h3>
+                    <p id="kpi-volatilidade">0%</p>
+                    <span class="badge" id="kpi-vol-badge"></span>
+                </div>
+                <div class="card">
+                    <h3>Ranking de Inflação <button class="btn-info-mini" onclick="abrirModal('A posição deste produto no ranking geral dos que mais sofreram variação no ano (para cima ou para baixo).')">i</button></h3>
+                    <p id="kpi-ranking">0º</p>
+                    <span class="sub" id="kpi-ranking-total"></span>
+                </div>
+                <div class="card">
+                    <h3>Completude dos Dados <button class="btn-info-mini" onclick="abrirModal('A porcentagem de meses do ano em que você conseguiu registrar o preço deste produto. 100% significa que não faltou nenhum mês.')">i</button></h3>
+                    <p id="kpi-completude">0%</p>
+                    <span class="sub">meses preenchidos</span>
+                </div>
+            </div>
+
+            <!-- LINHA 3: GRÁFICO DE PREÇOS -->
+            <div class="chart-container">
+                <canvas id="grafico-dashboard"></canvas>
+            </div>
+
+            <!-- LINHA 4: TERMÔMETRO -->
+            <div class="termometro-container">
+                <h3 style="font-size: 14px; margin-bottom: 15px; color: var(--text-muted);">Posição do Último Preço na Régua Histórica</h3>
+                <div class="termometro-labels">
+                    <span>Mínimo: R$ <span id="termo-min"></span></span>
+                    <span>Máximo: R$ <span id="termo-max"></span></span>
+                </div>
+                <div class="termometro-barra">
+                    <div class="termometro-indicador" id="termo-indicador" style="left: 0%;"></div>
+                </div>
+            </div>
+
+            <!-- LINHA 5: GRÁFICO DE VARIAÇÃO MENSAL (MoM) -->
+            <div class="chart-container" style="margin-top: 20px;">
+                <canvas id="grafico-variacao-mom"></canvas>
+            </div>
+
+            <!-- LINHA 6: MINI BREAKDOWN -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th title="O mês de referência da pesquisa de preço.">Mês</th>
+                            <th title="O valor exato do produto registrado neste mês.">Preço</th>
+                            <th title="Variação percentual em relação ao mês imediatamente anterior (Month over Month).">Variação MoM</th>
+                            <th title="Indica se o preço subiu (🔴 Alta), desceu (🟢 Baixa) ou se manteve igual/faltante (⚪ Neutro).">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-breakdown"></tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL DE INFORMAÇÃO -->
+    <div class="modal-overlay" id="modal-info">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>ℹ️ Entenda esta Métrica</h3>
+                <button class="btn-fechar" onclick="fecharModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-texto">Carregando...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Chart.register(window['chartjs-plugin-annotation']);
+
+        // --- FUNÇÕES DO MODAL ---
+        function abrirModal(texto) {
+            document.getElementById('modal-texto').innerText = texto;
+            document.getElementById('modal-info').style.display = 'flex';
+        }
+        function fecharModal() {
+            document.getElementById('modal-info').style.display = 'none';
+        }
+        document.getElementById('modal-info').addEventListener('click', function(e) {
+            if (e.target === this) fecharModal();
+        });
+        // --------------------------
+
+        const pathParts = window.location.pathname.split('/');
+        const ano = pathParts[2];
+        const produto = decodeURIComponent(pathParts[3]);
+        const mesesOrdem = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+        async function carregarEstatisticas() {
+            try {
+                const response = await fetch(`/api/estatisticas/${ano}/${produto}`);
+                if (!response.ok) throw new Error("Produto não encontrado na planilha.");
+                const dados = await response.json();
+
+                document.getElementById('nome-produto').innerText = dados.produto;
+                document.getElementById('ano-referencia').innerText = `Ano de Referência: ${dados.ano}`;
+
+                const tendDiv = document.getElementById('tendencia-container');
+                let tendClass = 'bg-estavel', tendText = 'Estável';
+                if (dados.tendencia === 'Alta') { tendClass = 'bg-alta'; tendText = 'Tendência de Alta 📈'; }
+                if (dados.tendencia === 'Queda') { tendClass = 'bg-queda'; tendText = 'Tendência de Queda 📉'; }
+                tendDiv.innerHTML = `<span class="badge-tendencia ${tendClass}">${tendText}</span>`;
+
+                document.getElementById('kpi-atual').innerText = `R$ ${dados.ultimo_preco.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-atual-mes').innerText = `em ${dados.ultimo_mes}`;
+                
+                const momEl = document.getElementById('kpi-mom');
+                if (dados.variacao_mom > 0) {
+                    momEl.className = 'badge badge-subiu';
+                    momEl.innerText = `▲ ${dados.variacao_mom.toFixed(2)}% (MoM)`;
+                } else if (dados.variacao_mom < 0) {
+                    momEl.className = 'badge badge-desceu';
+                    momEl.innerText = `▼ ${dados.variacao_mom.toFixed(2)}% (MoM)`;
+                } else {
+                    momEl.className = 'badge badge-neutro';
+                    momEl.innerText = `- 0% (MoM)`;
+                }
+
+                document.getElementById('kpi-media').innerText = `R$ ${dados.media.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-minimo').innerText = `R$ ${dados.minimo.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-mes-min').innerText = dados.mes_minimo;
+                document.getElementById('kpi-maximo').innerText = `R$ ${dados.maximo.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-mes-max').innerText = dados.mes_maximo;
+                
+                document.getElementById('kpi-amplitude').innerText = `R$ ${dados.amplitude_reais.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-amplitude-pct').innerText = `${dados.variacao_percentual.toFixed(2)}% de dispersão`;
+
+                document.getElementById('kpi-mediana').innerText = `R$ ${dados.mediana.toFixed(2).replace('.', ',')}`;
+                document.getElementById('kpi-moda').innerText = dados.moda ? `R$ ${dados.moda.toFixed(2).replace('.', ',')}` : 'N/A';
+                document.getElementById('kpi-moda-freq').innerText = dados.moda ? `Repetiu ${dados.moda_freq} vezes` : '';
+                
+                document.getElementById('kpi-volatilidade').innerText = `${dados.cv.toFixed(2)}%`;
+                const volBadge = document.getElementById('kpi-vol-badge');
+                let volClass = 'badge-neutro';
+                if (dados.volatilidade === 'Baixa') volClass = 'badge-desceu';
+                if (dados.volatilidade === 'Alta') volClass = 'badge-subiu';
+                volBadge.className = `badge ${volClass}`;
+                volBadge.innerText = dados.volatilidade;
+
+                document.getElementById('kpi-ranking').innerText = `${dados.posicao_ranking}º`;
+                document.getElementById('kpi-ranking-total').innerText = `de ${dados.total_produtos} produtos`;
+                document.getElementById('kpi-completude').innerText = `${dados.completude.toFixed(2)}%`;
+
+                document.getElementById('termo-min').innerText = dados.minimo.toFixed(2).replace('.', ',');
+                document.getElementById('termo-max').innerText = dados.maximo.toFixed(2).replace('.', ',');
+                let pctPosicao = 0;
+                if (dados.maximo > dados.minimo) {
+                    pctPosicao = ((dados.ultimo_preco - dados.minimo) / (dados.maximo - dados.minimo)) * 100;
+                }
+                document.getElementById('termo-indicador').style.left = `calc(${pctPosicao}% - 2px)`;
+
+                desenharGrafico(dados);
+                desenharGraficoVariacao(dados);
+                montarTabelaBreakdown(dados);
+
+                document.getElementById('carregando').style.display = 'none';
+                document.getElementById('conteudo').style.display = 'block';
+
+            } catch (erro) {
+                console.error(erro);
+                document.getElementById('carregando').style.display = 'none';
+                document.getElementById('erro').style.display = 'block';
+                document.getElementById('erro').innerText = "Erro: " + erro.message;
+            }
+        }
+
+        function desenharGrafico(dados) {
+            const ctx = document.getElementById('grafico-dashboard').getContext('2d');
+            const labels = mesesOrdem.filter(m => dados.historico[m] !== undefined);
+            const dataPrecos = labels.map(m => dados.historico[m] === "Falta" ? null : dados.historico[m]);
+            const media = dados.media;
+            const dp = dados.desvio_padrao;
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Preço',
+                        data: dataPrecos,
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.15)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#4CAF50',
+                        pointRadius: 4,
+                        pointHoverRadius: 7,
+                        fill: true,
+                        tension: 0.3,
+                        spanGaps: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Histórico de Preços (R$)', color: '#fff', font: {size: 16} },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let val = context.parsed.y;
+                                    if (val === null) return 'Falta';
+                                    let idx = context.dataIndex;
+                                    let varTexto = "";
+                                    if (idx > 0 && dataPrecos[idx-1] !== null) {
+                                        let prev = dataPrecos[idx-1];
+                                        let varPct = ((val - prev) / prev) * 100;
+                                        let sinal = varPct > 0 ? "+" : "";
+                                        varTexto = ` (${sinal}${varPct.toFixed(2)}% vs mês ant.)`;
+                                    }
+                                    let diffMedia = val - dados.media;
+                                    let sinalMedia = diffMedia > 0 ? "+" : "";
+                                    let textMedia = ` | ${sinalMedia}R$ ${diffMedia.toFixed(2)} vs média`;
+                                    return `R$ ${val.toFixed(2).replace('.', ',')}${varTexto}${textMedia}`;
+                                }
+                            }
+                        },
+                        annotation: {
+                            annotations: {
+                                linhaMedia: {
+                                    type: 'line',
+                                    yMin: media,
+                                    yMax: media,
+                                    borderColor: '#FF9800',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: { display: true, content: `Média: R$ ${media.toFixed(2)}`, position: 'end', backgroundColor: '#FF9800', color: '#000', font: { weight: 'bold' } }
+                                },
+                                bandaDesvio: {
+                                    type: 'box',
+                                    yMin: media - dp,
+                                    yMax: media + dp,
+                                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                                    borderColor: 'rgba(255, 152, 0, 0.3)',
+                                    borderWidth: 1
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: false, ticks: { color: '#aaa', callback: (v) => 'R$ ' + v }, grid: { color: '#333' } },
+                        x: { ticks: { color: '#aaa' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function desenharGraficoVariacao(dados) {
+            const ctx = document.getElementById('grafico-variacao-mom').getContext('2d');
+            const labels = mesesOrdem.filter(m => dados.historico[m] !== undefined);
+            const precos = labels.map(m => dados.historico[m] === "Falta" ? null : dados.historico[m]);
+            
+            const variacoes = [];
+            for (let i = 0; i < precos.length; i++) {
+                if (i === 0 || precos[i] === null || precos[i-1] === null) {
+                    variacoes.push(null); 
+                } else {
+                    let v = ((precos[i] - precos[i-1]) / precos[i-1]) * 100;
+                    variacoes.push(v);
+                }
+            }
+
+            const cores = variacoes.map(v => {
+                if (v === null) return 'transparent';
+                return v > 0 ? 'rgba(244, 67, 54, 0.8)' : 'rgba(76, 175, 80, 0.8)';
+            });
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Variação (%)',
+                        data: variacoes,
+                        backgroundColor: cores,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Variação Percentual Mês a Mês (MoM)', color: '#fff', font: {size: 16} },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let val = context.parsed.y;
+                                    if (val === null) return 'Sem dados';
+                                    let sinal = val > 0 ? "+" : "";
+                                    return `${sinal}${val.toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { ticks: { color: '#aaa', callback: (v) => v + '%' }, grid: { color: '#444' } },
+                        x: { ticks: { color: '#aaa' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function montarTabelaBreakdown(dados) {
+            const tbody = document.getElementById('tabela-breakdown');
+            tbody.innerHTML = '';
+            const labels = mesesOrdem.filter(m => dados.historico[m] !== undefined);
+            let precoAnterior = null;
+
+            labels.forEach(mes => {
+                let preco = dados.historico[mes];
+                const tr = document.createElement('tr');
+                
+                const tdMes = document.createElement('td');
+                tdMes.innerText = mes;
+                tr.appendChild(tdMes);
+
+                const tdPreco = document.createElement('td');
+                const tdVar = document.createElement('td');
+                const tdStatus = document.createElement('td');
+
+                if (preco === "Falta" || preco === null) {
+                    tdPreco.innerText = "-";
+                    tdPreco.className = 'falta';
+                    tdVar.innerText = "-";
+                    tdStatus.innerHTML = '⚪ Neutro';
+                    precoAnterior = null;
+                } else {
+                    tdPreco.innerText = `R$ ${preco.toFixed(2).replace('.', ',')}`;
+                    if (precoAnterior !== null) {
+                        let varPct = ((preco - precoAnterior) / precoAnterior) * 100;
+                        if (varPct > 0) {
+                            tdVar.innerHTML = `<span style="color:var(--danger)">▲ ${varPct.toFixed(2)}%</span>`;
+                            tdStatus.innerHTML = '🔴 Alta';
+                        } else if (varPct < 0) {
+                            tdVar.innerHTML = `<span style="color:var(--primary)">▼ ${Math.abs(varPct).toFixed(2)}%</span>`;
+                            tdStatus.innerHTML = '🟢 Baixa';
+                        } else {
+                            tdVar.innerText = "0.00%";
+                            tdStatus.innerHTML = '⚪ Neutro';
+                        }
+                    } else {
+                        tdVar.innerText = "-";
+                        tdStatus.innerHTML = '⚪ Neutro';
+                    }
+                    precoAnterior = preco;
+                }
+                tr.appendChild(tdPreco);
+                tr.appendChild(tdVar);
+                tr.appendChild(tdStatus);
+                tbody.appendChild(tr);
+            });
+        }
+
+        carregarEstatisticas();
+    </script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Início - Estudo de Preços</title>
+    <style>
+        :root {
+            --bg: #121212; --surface: #1e1e1e; --surface-light: #2a2a2a;
+            --text: #e0e0e0; --text-muted: #9e9e9e;
+            --primary: #4CAF50; --info: #2196F3; --warning: #FF9800; --purple: #9C27B0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+        
+        .hero { text-align: center; margin-bottom: 50px; }
+        .hero h1 { font-size: 48px; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 15px;}
+        .hero p { font-size: 18px; color: var(--text-muted); max-width: 600px; margin: 0 auto; line-height: 1.5; }
+
+        /* Grid dos Cards Principais */
+        .grid-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; max-width: 1100px; width: 100%; }
+        
+        .menu-card { 
+            background-color: var(--surface); padding: 30px; border-radius: 12px; color: var(--text);
+            border: 1px solid #333; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+            display: flex; flex-direction: column;
+        }
+        .menu-card:hover { 
+            transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        }
+        
+        /* Cores de destaque no hover de cada card */
+        .card-tabela:hover { border-color: var(--info); }
+        .card-ranking:hover { border-color: var(--warning); }
+        .card-comparar:hover { border-color: var(--purple); }
+        
+        .menu-card .icon { font-size: 32px; margin-bottom: 15px; }
+        .menu-card h2 { font-size: 22px; margin-bottom: 10px; color: #fff; }
+        .menu-card p { font-size: 14px; color: var(--text-muted); line-height: 1.4; margin-bottom: 25px; flex: 1;}
+
+        /* Área dos Botões de Ano */
+        .anos-disponiveis { 
+            display: flex; gap: 10px; flex-wrap: wrap; 
+            border-top: 1px solid #333; padding-top: 20px;
+        }
+        
+        /* Botões de Ano Estilizados */
+        .btn-ano { 
+            background-color: #2a2a2a; 
+            padding: 10px 18px; 
+            border-radius: 8px; 
+            font-size: 15px; 
+            font-weight: bold; 
+            color: var(--text-muted); 
+            border: 1px solid #444;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Efeito de Hover nos Botões de Ano */
+        .btn-ano:hover { 
+            color: #fff; 
+            transform: scale(1.05);
+        }
+
+        /* Cores específicas do hover para cada tipo de card */
+        .card-tabela .btn-ano:hover { background-color: var(--info); border-color: var(--info); }
+        .card-ranking .btn-ano:hover { background-color: var(--warning); border-color: var(--warning); color: #000; }
+        .card-comparar .btn-ano:hover { background-color: var(--purple); border-color: var(--purple); }
+        
+        #carregando { color: var(--text-muted); font-size: 18px; }
+    </style>
+</head>
+<body>
+
+    <div class="hero">
+        <h1>🛒 Estudo de preços</h1>
+        <p>Bem-vindo ao seu sistema pessoal de controle de inflação e histórico de preços. Escolha uma das ferramentas abaixo para começar.</p>
+    </div>
+
+    <div id="carregando">Buscando dados disponíveis...</div>
+    
+    <div class="grid-menu" id="menu" style="display: none;">
+        
+        <!-- CARD: TABELA DE PREÇOS -->
+        <div class="menu-card card-tabela">
+            <div class="icon">📋</div>
+            <h2>Tabela de Preços</h2>
+            <p>Visualize a planilha completa mês a mês de todos os produtos. Ideal para consultas rápidas e comparações visuais.</p>
+            <div class="anos-disponiveis" id="anos-tabela"></div>
+        </div>
+
+        <!-- CARD: RANKING GERAL -->
+        <div class="menu-card card-ranking">
+            <div class="icon">📊</div>
+            <h2>Ranking e Estatísticas</h2>
+            <p>Descubra quais produtos mais subiram ou desceram, analise a volatilidade e compare o preço médio de toda a cesta.</p>
+            <div class="anos-disponiveis" id="anos-ranking"></div>
+        </div>
+
+        <!-- CARD: COMPARAR PRODUTOS -->
+        <div class="menu-card card-comparar">
+            <div class="icon">🔄</div>
+            <h2>Comparar Produtos</h2>
+            <p>Monte seu próprio gráfico escolhendo múltiplos produtos para ver a variação percentual de cada um lado a lado.</p>
+            
+            <div class="anos-disponiveis" style="justify-content: center;">
+                <a href="/comparar/2026" id="btn-comparar" class="btn-ano" style="width: 100%; justify-content: center;">
+                    🔄 Acessar Comparador →
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        async function carregarHome() {
+            try {
+                const response = await fetch('/api/anos');
+                const anos = await response.json();
+                
+                const carregando = document.getElementById('carregando');
+                const menu = document.getElementById('menu');
+
+                if (anos.length === 0) {
+                    carregando.innerText = "Nenhuma planilha encontrada na pasta data/.";
+                    return;
+                }
+
+                const divAnosTabela = document.getElementById('anos-tabela');
+                const divAnosRanking = document.getElementById('anos-ranking');
+
+                anos.forEach(ano => {
+                    // Botão para a Tabela
+                    const btnTabela = document.createElement('a');
+                    btnTabela.href = `/tabela/${ano}`;
+                    btnTabela.className = 'btn-ano';
+                    btnTabela.innerHTML = `📅 ${ano} →`;
+                    divAnosTabela.appendChild(btnTabela);
+
+                    // Botão para o Ranking
+                    const btnRanking = document.createElement('a');
+                    btnRanking.href = `/ranking/${ano}`;
+                    btnRanking.className = 'btn-ano';
+                    btnRanking.innerHTML = `🏆 ${ano} →`;
+                    divAnosRanking.appendChild(btnRanking);
+                });
+
+                // Atualiza o link do botão único de comparação com o ano mais recente
+                const btnCompararUnico = document.getElementById('btn-comparar');
+                if (btnCompararUnico && anos.length > 0) {
+                    btnCompararUnico.href = `/comparar/${anos[0]}`;
+                }
+
+                carregando.style.display = 'none';
+                menu.style.display = 'grid';
+
+            } catch (erro) {
+                console.error(erro);
+                document.getElementById('carregando').innerText = "Erro ao conectar com o servidor.";
+            }
+        }
+        carregarHome();
+    </script>
+</body>
+</html>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Preços do Mercado</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: #fff; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        .header { 
+            background-color: #1e1e1e; display: flex; justify-content: space-between; align-items: center; 
+            padding: 15px 30px; border-bottom: 2px solid #444; flex-shrink: 0; z-index: 20;
+        }
+        h1 { color: #4CAF50; display: flex; align-items: center; gap: 10px; font-size: 24px; }
+        
+        .botoes-container { display: flex; gap: 10px; align-items: center; }
+        .ano-btn { 
+            background-color: #333; color: white; border: 1px solid #555; 
+            padding: 8px 16px; cursor: pointer; border-radius: 4px; 
+            font-size: 16px; transition: 0.2s; text-decoration: none;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .ano-btn:hover { background-color: #4CAF50; color: #fff; border-color: #4CAF50; }
+        .btn-ano-atual { background-color: #4CAF50; border-color: #4CAF50; font-weight: bold; color: #fff; cursor: default;}
+        .btn-ranking { background-color: #2196F3; border-color: #2196F3; font-weight: bold; }
+        .btn-ranking:hover { background-color: #1976D2; border-color: #1976D2; }
+
+        .conteudo-container { flex: 1; overflow-y: auto; padding: 0 30px 50px 30px; }
+
+        table { width: 100%; border-collapse: separate; border-spacing: 0; background-color: #2a2a2a; margin-top: 20px; }
+        th { 
+            background-color: #111; color: #ddd; position: sticky; top: 0; z-index: 10; 
+            padding: 15px 10px; border-bottom: 2px solid #4CAF50; box-shadow: 0 2px 5px rgba(0,0,0,0.5); font-weight: bold;
+        }
+        th:first-child { position: sticky; left: 0; z-index: 15; background-color: #111; border-right: 2px solid #4CAF50; text-align: left; padding-left: 15px; }
+        td { padding: 12px 10px; text-align: center; border-bottom: 1px solid #444; white-space: nowrap; }
+        td:first-child { text-align: left; font-weight: bold; position: sticky; left: 0; background-color: #2a2a2a; z-index: 5; border-right: 2px solid #444; padding-left: 15px; }
+
+        tr:nth-child(even) td { background-color: #333; }
+        tr:nth-child(even) td:first-child { background-color: #333; }
+        tr:hover td { background-color: #444; }
+        tr:hover td:first-child { background-color: #444; }
+
+        a { color: #4CAF50; text-decoration: none; transition: 0.2s; }
+        a:hover { color: #81C784; text-decoration: underline; }
+        .falta { color: #888; font-style: italic; }
+        #carregando { text-align: center; margin-top: 50px; font-size: 20px; color: #aaa; }
+
+        .grafico-box {
+            background-color: #2a2a2a; margin-top: 40px; margin-bottom: 40px;
+            padding: 20px; border-radius: 8px; border: 1px solid #444;
+            height: 400px; width: 100%; position: relative; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .grafico-titulo { font-size: 18px; color: #fff; margin-bottom: 5px; font-weight: bold; flex-shrink: 0;}
+        .grafico-subtitulo { font-size: 14px; color: #aaa; margin-bottom: 15px; flex-shrink: 0;}
+        .canvas-container { flex: 1; position: relative; width: 100%; }
+
+        .link-mes { color: #fff !important; display: block; width: 100%; height: 100%; }
+        .link-mes:hover { color: #2196F3 !important; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🛒 Histórico de Preços</h1>
+        <div class="botoes-container">
+            <a href="/" class="ano-btn" style="background-color: #444; border-color: #444;">🏠 Início</a>
+            <div id="area-ano-atual" style="display: flex; gap: 10px;"></div>
+            <a id="btn-ranking" class="ano-btn btn-ranking" href="#">📊 Ranking Geral</a>
+        </div>
+    </div>
+
+    <div class="conteudo-container">
+        <div id="carregando">Carregando dados do servidor...</div>
+        
+        <table id="tabela-precos" style="display: none;">
+            <thead>
+                <tr id="cabecalho-tabela"></tr>
+            </thead>
+            <tbody id="corpo-tabela"></tbody>
+        </table>
+
+        <!-- GRÁFICO 1: BARRAS - Valor Total da Cesta -->
+        <div id="area-grafico-1" class="grafico-box" style="display: none;">
+            <div class="grafico-titulo">Custo Total da Cesta (R$)</div>
+            <div class="grafico-subtitulo">Soma dos preços de todos os produtos no mês. <span style="color:#F44336">Vermelho: Mais caro</span> | <span style="color:#4CAF50">Verde: Mais barato</span></div>
+            <div class="canvas-container">
+                <canvas id="grafico-barras-cesta"></canvas>
+            </div>
+        </div>
+
+        <!-- GRÁFICO 2: LINHA - Custo Total vs Média (NOVO) -->
+        <div id="area-grafico-2" class="grafico-box" style="display: none;">
+            <div class="grafico-titulo">Custo Total vs Média Anual (R$)</div>
+            <div class="grafico-subtitulo">Comparação do gasto mensal com a linha da média e a faixa de desvio padrão.</div>
+            <div class="canvas-container">
+                <canvas id="grafico-linha-cesta"></canvas>
+            </div>
+        </div>
+
+        <!-- GRÁFICO 3: Inflação da Cesta -->
+        <div id="area-grafico-3" class="grafico-box" style="display: none;">
+            <div class="grafico-titulo">Evolução da Inflação da Cesta (%)</div>
+            <div id="subtitulo-inflacao" class="grafico-subtitulo">Variação percentual do custo médio por produto.</div>
+            <div class="canvas-container">
+                <canvas id="grafico-cesta-inflacao"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Chart.register(window['chartjs-plugin-annotation']);
+
+        const pathParts = window.location.pathname.split('/');
+        const anoAtual = pathParts[2];
+        let mesBaseGrafico = "Janeiro"; 
+
+        async function iniciar() {
+            if (!anoAtual) return;
+
+            const areaAno = document.getElementById('area-ano-atual');
+            const btnAno = document.createElement('span');
+            btnAno.className = 'ano-btn btn-ano-atual';
+            btnAno.innerText = `Ano ${anoAtual}`;
+            areaAno.appendChild(btnAno);
+
+            document.getElementById('btn-ranking').href = `/ranking/${anoAtual}`;
+
+            await carregarTabela(anoAtual);
+            await carregarGraficos(anoAtual);
+        }
+
+        async function carregarTabela(ano) {
+            document.getElementById('carregando').style.display = 'block';
+            try {
+                const response = await fetch(`/api/tabela/${ano}`);
+                const dados = await response.json();
+
+                const cabecalho = document.getElementById('cabecalho-tabela');
+                cabecalho.innerHTML = '';
+                const colunas = Object.keys(dados.dados[0]).filter(c => c !== 'Unnamed: 0');
+                
+                colunas.forEach(coluna => {
+                    const th = document.createElement('th');
+                    if (coluna !== 'Produto') {
+                        const link = document.createElement('a');
+                        link.href = `/cesta/${ano}/${coluna}`;
+                        link.innerText = coluna;
+                        link.className = 'link-mes';
+                        link.title = `Ver composição da cesta de ${coluna}`;
+                        th.appendChild(link);
+                    } else {
+                        th.innerText = coluna;
+                    }
+                    cabecalho.appendChild(th);
+                });
+
+                const corpo = document.getElementById('corpo-tabela');
+                corpo.innerHTML = '';
+
+                dados.dados.forEach(produto => {
+                    const tr = document.createElement('tr');
+                    colunas.forEach(coluna => {
+                        const td = document.createElement('td');
+                        let valor = produto[coluna];
+
+                        if (coluna === 'Produto') {
+                            const link = document.createElement('a');
+                            link.href = `/estatisticas/${ano}/${encodeURIComponent(valor)}`;
+                            link.innerText = valor.trim();
+                            td.appendChild(link);
+                        } else if (valor === 'Falta' || valor === null) {
+                            td.innerText = '-';
+                            td.className = 'falta';
+                        } else {
+                            td.innerText = `R$ ${valor.toFixed(2).replace('.', ',')}`;
+                        }
+                        tr.appendChild(td);
+                    });
+                    corpo.appendChild(tr);
+                });
+
+                document.getElementById('carregando').style.display = 'none';
+                document.getElementById('tabela-precos').style.display = 'table';
+                document.getElementById('area-grafico-1').style.display = 'flex';
+                document.getElementById('area-grafico-2').style.display = 'flex';
+                document.getElementById('area-grafico-3').style.display = 'flex';
+
+            } catch (erro) {
+                console.error(erro);
+                document.getElementById('carregando').innerText = 'Erro ao carregar a tabela.';
+            }
+        }
+
+        async function carregarGraficos(ano) {
+            try {
+                const response = await fetch(`/api/graficos-cesta/${ano}`);
+                const dados = await response.json();
+                
+                mesBaseGrafico = dados.mes_base || "Janeiro";
+                document.getElementById('subtitulo-inflacao').innerText = `Variação percentual do custo médio por produto em relação a ${mesBaseGrafico}.`;
+
+                // ==========================================
+                // GRÁFICO 1: BARRAS - CUSTO TOTAL
+                // ==========================================
+                const labels1 = dados.grafico_valores.map(d => d.mes);
+                const valoresTotais = dados.grafico_valores.map(d => d.total);
+                
+                const valoresValidos = valoresTotais.filter(v => v !== null);
+                const maiorValor = Math.max(...valoresValidos);
+                const menorValor = Math.min(...valoresValidos);
+
+                const coresBarras = valoresTotais.map(val => {
+                    if (val === maiorValor) return 'rgba(244, 67, 54, 0.8)'; 
+                    if (val === menorValor) return 'rgba(76, 175, 80, 0.8)'; 
+                    return 'rgba(33, 150, 243, 0.7)'; 
+                });
+
+                const bordasBarras = valoresTotais.map(val => {
+                    if (val === maiorValor) return '#F44336';
+                    if (val === menorValor) return '#4CAF50';
+                    return '#2196F3';
+                });
+
+                new Chart(document.getElementById('grafico-barras-cesta').getContext('2d'), {
+                    type: 'bar', 
+                    data: {
+                        labels: labels1,
+                        datasets: [{
+                            label: 'Custo Total (R$)',
+                            data: valoresTotais,
+                            backgroundColor: coresBarras,
+                            borderColor: bordasBarras,
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: function(context) {
+                                let idx = context.dataIndex;
+                                let item = dados.grafico_valores[idx];
+                                if (item.total === null) return 'Sem dados';
+                                return [
+                                    `Total: R$ ${item.total.toFixed(2).replace('.', ',')}`,
+                                    `Média/Produto: R$ ${item.media.toFixed(2).replace('.', ',')}`,
+                                    `Produtos: ${item.qtd}`
+                                ];
+                            }}}
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { color: '#aaa', callback: (v) => 'R$ ' + v }, grid: { color: '#444' } },
+                            x: { ticks: { color: '#aaa' }, grid: { display: false } }
+                        }
+                    }
+                });
+
+                // ==========================================
+                // GRÁFICO 2: LINHA - CUSTO TOTAL vs MÉDIA (NOVO)
+                // ==========================================
+                const mediaCusto = dados.media_custo_total;
+                const dpCusto = dados.desvio_custo_total;
+
+                new Chart(document.getElementById('grafico-linha-cesta').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: labels1,
+                        datasets: [{
+                            label: 'Custo Total (R$)',
+                            data: valoresTotais,
+                            borderColor: '#00BCD4', // Ciano
+                            backgroundColor: 'rgba(0, 188, 212, 0.15)',
+                            borderWidth: 3,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#00BCD4',
+                            pointRadius: 5,
+                            pointHoverRadius: 8,
+                            fill: true, tension: 0.3, spanGaps: true
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: function(context) {
+                                let val = context.parsed.y;
+                                if (val === null) return 'Sem dados';
+                                return `Total: R$ ${val.toFixed(2).replace('.', ',')}`;
+                            }}}
+                            ,annotation: {
+                                annotations: {
+                                    linhaMedia: {
+                                        type: 'line', yMin: mediaCusto, yMax: mediaCusto,
+                                        borderColor: '#F44336', borderWidth: 2, borderDash: [5, 5],
+                                        label: { display: true, content: `Média: R$ ${mediaCusto.toFixed(2)}`, position: 'end', backgroundColor: '#F44336', color: '#fff', font: { weight: 'bold' } }
+                                    },
+                                    bandaDesvio: {
+                                        type: 'box', yMin: mediaCusto - dpCusto, yMax: mediaCusto + dpCusto,
+                                        backgroundColor: 'rgba(244, 67, 54, 0.1)', borderColor: 'rgba(244, 67, 54, 0.3)', borderWidth: 1
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { beginAtZero: false, ticks: { color: '#aaa', callback: (v) => 'R$ ' + v }, grid: { color: '#444' } },
+                            x: { ticks: { color: '#aaa' }, grid: { display: false } }
+                        }
+                    }
+                });
+
+                // ==========================================
+                // GRÁFICO 3: INFLAMAÇÃO DA CESTA
+                // ==========================================
+                const labels2 = dados.grafico_inflacao.map(d => d.mes);
+                const valoresInflacao = dados.grafico_inflacao.map(d => d.inflacao);
+                const mediaGeral = dados.media_inflacao_geral;
+                const dpGeral = dados.dp_inflacao;
+
+                new Chart(document.getElementById('grafico-cesta-inflacao').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: labels2,
+                        datasets: [{
+                            label: 'Inflação (%)',
+                            data: valoresInflacao,
+                            borderColor: '#FF9800', 
+                            backgroundColor: 'rgba(255, 152, 0, 0.15)',
+                            borderWidth: 3,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#FF9800',
+                            pointRadius: 5,
+                            pointHoverRadius: 8,
+                            fill: true, tension: 0.3, spanGaps: true
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: function(context) {
+                                let val = context.parsed.y;
+                                if (val === null) return 'Sem dados';
+                                let sinal = val > 0 ? "+" : "";
+                                return `${sinal}${val.toFixed(2)}% em relação a ${mesBaseGrafico}`;
+                            }}}
+                            ,annotation: {
+                                annotations: {
+                                    linhaMedia: {
+                                        type: 'line', yMin: mediaGeral, yMax: mediaGeral,
+                                        borderColor: '#F44336', borderWidth: 2, borderDash: [5, 5],
+                                        label: { display: true, content: `Média: ${mediaGeral > 0 ? '+' : ''}${mediaGeral.toFixed(2)}%`, position: 'end', backgroundColor: '#F44336', color: '#fff', font: { weight: 'bold' } }
+                                    },
+                                    bandaDesvio: {
+                                        type: 'box', yMin: mediaGeral - dpGeral, yMax: mediaGeral + dpGeral,
+                                        backgroundColor: 'rgba(244, 67, 54, 0.1)', borderColor: 'rgba(244, 67, 54, 0.3)', borderWidth: 1
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { ticks: { color: '#aaa', callback: (v) => (v > 0 ? '+' : '') + v + '%' }, grid: { color: '#444' } },
+                            x: { ticks: { color: '#aaa' }, grid: { display: false } }
+                        }
+                    }
+                });
+
+            } catch (erro) {
+                console.error("Erro ao carregar gráficos:", erro);
+            }
+        }
+
+        iniciar();
+    </script>
+    <script src="/static/tema.js"></script>
+</body>
+</html>
